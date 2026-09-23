@@ -46,12 +46,14 @@ export default defineConfig(async () => {
   return {
     server: {
       host: "0.0.0.0",
-      ...(isCodexSeatbeltSandbox
+      allowedHosts: true,
+      // Bind mounts in Docker/preview need polling for HMR to fire.
+      ...(isCodexSeatbeltSandbox || !!process.env.BASE44_PUBLIC_HOST_SUFFIX
         ? { watch: { useFsEvents: false, usePolling: true } }
         : {}),
       proxy: {
         "/api": {
-          target: "http://127.0.0.1:18765",
+          target: process.env.CS_BOARD_API_URL || "http://127.0.0.1:18765",
           changeOrigin: true,
           xfwd: true,
         },

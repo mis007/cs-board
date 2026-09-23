@@ -1,0 +1,45 @@
+services:
+  # Python FastAPI backend — serves /api/* on port 18765.
+  # No boot-time secrets: API keys (OpenAI-compatible text/image models,
+  # IndexTTS Gradio endpoint) are configured at runtime via the UI and
+  # persisted in .webapp/config.json.
+  backend:
+    image: python:3.13-slim
+    working_dir: /app
+    volumes:
+      - ./:/app
+    environment:
+      - CS_BOARD_ROOT=/app
+      - CS_BOARD_STATE_DIR=/app/.webapp
+      - PYTHONUNBUFFERED=1
+    command: sh -c "pip install --no-cache-dir -r webapp/requirements.txt && python -m uvicorn webapp.server:app --host 0.0.0.0 --port 18765"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:18765/api/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  # Vite / vinext frontend dev server — port 13000, mapped to host 3000.
+  # API calls to /api/* are proxied to the backend service.
+  web:
+    image: node:22
+    working_dir: /app/web
+    volumes:
+      - ./:/app
+    ports:
+      - "3000:13000"
+    environment:
+      - CS_BOARD_API_URL=http://backend:18765
+      - BASE44_PUBLIC_HOST_SUFFIX
+      - __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS
+    command: sh -c "npm install && npm run dev"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:13000', r => process.exit(r.statusCode < 500 ? 0 : 1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 90s
